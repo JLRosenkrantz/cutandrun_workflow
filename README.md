@@ -67,11 +67,6 @@ This README provides instructions on how to run the Snakemake workflow for Cut&R
    - Raw FastQC report: `multiqc/raw_fastqc_report.html`
    - Trimmed FastQC report: `multiqc/trimmed_fastqc_report.html`
 
-4. **Clean Up**:
-   Remove intermediate files if necessary:
-   ```bash
-   snakemake --delete-all-output
-   ```
 
 ## Workflow Steps
 
