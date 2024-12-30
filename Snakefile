@@ -15,23 +15,24 @@ RAW_FASTQ_R1 = expand(f"{FASTQ_DIR}/{{sample}}_R1_001.fastq.gz", sample=SAMPLES)
 RAW_FASTQ_R2 = expand(f"{FASTQ_DIR}/{{sample}}_R2_001.fastq.gz", sample=SAMPLES)
 
 # Trimmed FastQ files (output of fastp)
-TRIMMED_FASTQ_R1 = expand("trimmed/{sample}_R1_trimmed.fastq.gz", sample=SAMPLES)
-TRIMMED_FASTQ_R2 = expand("trimmed/{sample}_R2_trimmed.fastq.gz", sample=SAMPLES)
+TRIMMED_FASTQ_R1 = expand("02_trimmed/{sample}_R1_trimmed.fastq.gz", sample=SAMPLES)
+TRIMMED_FASTQ_R2 = expand("02_trimmed/{sample}_R2_trimmed.fastq.gz", sample=SAMPLES)
 
 # Define FastQC reports
-FASTQC_RAW = expand("fastqc_raw/{sample}_R1_001_fastqc.html", sample=SAMPLES) + expand("fastqc_raw/{sample}_R2_001_fastqc.html", sample=SAMPLES)
-FASTQC_TRIMMED = expand("fastqc_trimmed/{sample}_R1_trimmed_fastqc.html", sample=SAMPLES) + expand("fastqc_trimmed/{sample}_R2_trimmed_fastqc.html", sample=SAMPLES)
+FASTQC_RAW = expand("01_fastqc_raw/{sample}_R1_001_fastqc.html", sample=SAMPLES) + expand("01_fastqc_raw/{sample}_R2_001_fastqc.html", sample=SAMPLES)
+FASTQC_TRIMMED = expand("03_fastqc_trimmed/{sample}_R1_trimmed_fastqc.html", sample=SAMPLES) + expand("03_fastqc_trimmed/{sample}_R2_trimmed_fastqc.html", sample=SAMPLES)
 
 # Define alignment outputs
-ALIGNED_BAM = expand("aligned/{sample}.bam", sample=SAMPLES)
-FILTERED_BAM = expand("filtered/{sample}.bam", sample=SAMPLES)
+ALIGNED_BAM = expand("04_aligned/{sample}.bam", sample=SAMPLES)
+FILTERED_BAM = expand("05_filtered/{sample}.bam", sample=SAMPLES)
+BED_FILES = expand("06_bed/{sample}_filtered.bed", sample=SAMPLES)
 
 # Define the final rule
 rule all:
     input:
-        FASTQC_RAW + FASTQC_TRIMMED + ALIGNED_BAM + FILTERED_BAM + [
-            "multiqc/raw_fastqc_report.html",
-            "multiqc/trimmed_fastqc_report.html"
+        FASTQC_RAW + FASTQC_TRIMMED + ALIGNED_BAM + FILTERED_BAM + BED_FILES + [
+            "01_multiqc/raw_fastqc_report.html",
+            "03_multiqc/trimmed_fastqc_report.html"
         ]
 
 # FastQC analysis on raw fastq files
@@ -40,41 +41,39 @@ rule fastqc_raw:
         raw_fastq_r1=f"{FASTQ_DIR}/{{sample}}_R1_001.fastq.gz",
         raw_fastq_r2=f"{FASTQ_DIR}/{{sample}}_R2_001.fastq.gz"
     output:
-        html_r1="fastqc_raw/{sample}_R1_001_fastqc.html",
-        zip_r1="fastqc_raw/{sample}_R1_001_fastqc.zip",
-        html_r2="fastqc_raw/{sample}_R2_001_fastqc.html",
-        zip_r2="fastqc_raw/{sample}_R2_001_fastqc.zip"
+        html_r1="01_fastqc_raw/{sample}_R1_001_fastqc.html",
+        zip_r1="01_fastqc_raw/{sample}_R1_001_fastqc.zip",
+        html_r2="01_fastqc_raw/{sample}_R2_001_fastqc.html",
+        zip_r2="01_fastqc_raw/{sample}_R2_001_fastqc.zip"
     threads: 4
     log:
         "logs/fastqc_raw_{sample}.log"
     shell:
-        "fastqc -t {threads} {input.raw_fastq_r1} {input.raw_fastq_r2} -o fastqc_raw/ &> {log}"
-        
+        "fastqc -t {threads} {input.raw_fastq_r1} {input.raw_fastq_r2} -o 01_fastqc_raw/ &> {log}"
 
 # MultiQC report on raw FastQC
 rule multiqc_raw:
     input:
-        expand("fastqc_raw/{sample}_R1_001_fastqc.zip", sample=SAMPLES) + expand("fastqc_raw/{sample}_R2_001_fastqc.zip", sample=SAMPLES)
+        expand("01_fastqc_raw/{sample}_R1_001_fastqc.zip", sample=SAMPLES) + expand("01_fastqc_raw/{sample}_R2_001_fastqc.zip", sample=SAMPLES)
     output:
-        "multiqc/raw_fastqc_report.html"
+        "01_multiqc/raw_fastqc_report.html"
     threads: 4
     log:
         "logs/multiqc_raw.log"
     shell:
-        "multiqc fastqc_raw/ -o multiqc/ -n raw_fastqc_report &> {log}"
+        "multiqc 01_fastqc_raw/ -o 01_multiqc/ -n raw_fastqc_report &> {log}"
 
 # Trimming with fastp
 rule trim:
     input:
-        priority="multiqc/raw_fastqc_report.html",
         raw_fastq_r1=f"{FASTQ_DIR}/{{sample}}_R1_001.fastq.gz",
         raw_fastq_r2=f"{FASTQ_DIR}/{{sample}}_R2_001.fastq.gz"
     output:
-        trimmed_r1="trimmed/{sample}_R1_trimmed.fastq.gz",
-        trimmed_r2="trimmed/{sample}_R2_trimmed.fastq.gz"
+        trimmed_r1="02_trimmed/{sample}_R1_trimmed.fastq.gz",
+        trimmed_r2="02_trimmed/{sample}_R2_trimmed.fastq.gz"
     params:
-        fastp_output="trimmed/{sample}_fastp.json",
-        fastp_html="trimmed/{sample}_fastp.html"
+        fastp_output="02_trimmed/{sample}_fastp.json",
+        fastp_html="02_trimmed/{sample}_fastp.html"
     threads: 4
     log:
         "logs/trim_{sample}.log"
@@ -92,47 +91,43 @@ rule trim:
 # FastQC analysis on trimmed fastq files
 rule fastqc_trimmed:
     input:
-        priority1=TRIMMED_FASTQ_R1,
-        priority2=TRIMMED_FASTQ_R2,
-        trimmed_r1="trimmed/{sample}_R1_trimmed.fastq.gz",
-        trimmed_r2="trimmed/{sample}_R2_trimmed.fastq.gz"
+        trimmed_r1="02_trimmed/{sample}_R1_trimmed.fastq.gz",
+        trimmed_r2="02_trimmed/{sample}_R2_trimmed.fastq.gz"
     output:
-        html_r1="fastqc_trimmed/{sample}_R1_trimmed_fastqc.html",
-        zip_r1="fastqc_trimmed/{sample}_R1_trimmed_fastqc.zip",
-        html_r2="fastqc_trimmed/{sample}_R2_trimmed_fastqc.html",
-        zip_r2="fastqc_trimmed/{sample}_R2_trimmed_fastqc.zip"
+        html_r1="03_fastqc_trimmed/{sample}_R1_trimmed_fastqc.html",
+        zip_r1="03_fastqc_trimmed/{sample}_R1_trimmed_fastqc.zip",
+        html_r2="03_fastqc_trimmed/{sample}_R2_trimmed_fastqc.html",
+        zip_r2="03_fastqc_trimmed/{sample}_R2_trimmed_fastqc.zip"
     threads: 4
     log:
         "logs/fastqc_trimmed_{sample}.log"
     shell:
-        "fastqc -t {threads} {input.trimmed_r1} {input.trimmed_r2} -o fastqc_trimmed/ &> {log}"
+        "fastqc -t {threads} {input.trimmed_r1} {input.trimmed_r2} -o 03_fastqc_trimmed/ &> {log}"
 
 # MultiQC report on trimmed FastQC
 rule multiqc_trimmed:
     input:
-        expand("fastqc_trimmed/{sample}_R1_trimmed_fastqc.zip", sample=SAMPLES) + expand("fastqc_trimmed/{sample}_R2_trimmed_fastqc.zip", sample=SAMPLES)
+        expand("03_fastqc_trimmed/{sample}_R1_trimmed_fastqc.zip", sample=SAMPLES) + expand("03_fastqc_trimmed/{sample}_R2_trimmed_fastqc.zip", sample=SAMPLES)
     output:
-        "multiqc/trimmed_fastqc_report.html"
+        "03_multiqc/trimmed_fastqc_report.html"
     threads: 4
     log:
         "logs/multiqc_trimmed.log"
     shell:
-        "multiqc fastqc_trimmed/ -o multiqc/ -n trimmed_fastqc_report &> {log}"
+        "multiqc 03_fastqc_trimmed/ -o 03_multiqc/ -n trimmed_fastqc_report &> {log}"
 
-# Bowtie2 alignment to gibbon genome
+# Bowtie2 alignment to genome
 rule align_bowtie2:
     input:
-        priority="multiqc/trimmed_fastqc_report.html",
-        trimmed_r1="trimmed/{sample}_R1_trimmed.fastq.gz",
-        trimmed_r2="trimmed/{sample}_R2_trimmed.fastq.gz"
+        trimmed_r1="02_trimmed/{sample}_R1_trimmed.fastq.gz",
+        trimmed_r2="02_trimmed/{sample}_R2_trimmed.fastq.gz"
     output:
-        sam="aligned/{sample}.sam",
-        bam="aligned/{sample}.bam"
+        sam=temp("04_aligned/{sample}.sam"),
+        bam="04_aligned/{sample}.bam"
     params:
         bowtie2_index=GENOME_INDEX,
         min_insert=10,
-        max_insert=700,
-        threads=4
+        max_insert=700
     threads: 4
     log:
         "logs/align_bowtie2_{sample}.log"
@@ -145,16 +140,66 @@ rule align_bowtie2:
         samtools view -bS {output.sam} | samtools sort -o {output.bam} && \
         samtools index {output.bam}"
 
-# Filter low quality reads
+# Filter low-quality reads
 rule filter_bam:
     input:
-        bam="aligned/{sample}.bam"
+        bam="04_aligned/{sample}.bam"
     output:
-        filtered_bam="filtered/{sample}.bam"
+        filtered_bam="05_filtered/{sample}.bam"
     params:
-        quality=30
+        quality=20
     threads: 4
     log:
         "logs/filter_bam_{sample}.log"
     shell:
-        "samtools view -b -q {params.quality} {input.bam} > {output.filtered_bam} &> {log}"
+        "samtools view -b -q {params.quality} -o {output.filtered_bam} {input.bam} &> {log}"
+
+# Convert filtered BAM to BED files with UCSC track header
+rule bam_to_bed:
+    input:
+        filtered_bam="05_filtered/{sample}.bam"
+    output:
+        bed="06_bed/{sample}_filtered.bed"
+    params:
+        track_name="Filtered {sample} BAM",
+        track_description="Filtered aligned reads in BED format for UCSC Genome Browser",
+        visibility="4",
+        color="0,0,255"
+    threads: 4
+    log:
+        "logs/bam_to_bed_{sample}.log"
+    shell:
+        """
+        echo 'track name="{params.track_name}" description="{params.track_name}" visibility={params.visibility} color={params.color}' > {output.bed}
+        bedtools bamtobed -i {input.filtered_bam} >> {output.bed} 2> {log}
+        """
+        
+         
+# MACS2 peak calling rule
+# rule call_peaks_macs2:
+#     input:
+#         filtered_bam="filtered/{sample}.bam"
+#     output:
+#         narrowpeak="peaks/{sample}_peaks.narrowPeak",
+#         summits="peaks/{sample}_summits.bed"
+#     params:
+#         genome="2.7e9",  # Replace with "hs" (human), "mm" (mouse), or 2.7e9 for gibbon genome size
+#         name="{sample}",
+#         pvalue=1e-3  # Adjust as needed
+#     log:
+#         "logs/macs2_{sample}.log"
+#     threads: 4
+#     shell:
+#         "macs2 callpeak -t {input.filtered_bam} -f BAM -g {params.genome} -n {params.name} --outdir peaks/ \
+#         --keep-dup all --call-summits --pvalue {params.pvalue} &> {log}" 
+        
+# macs2 callpeak -t filtered_S7.bam -f BAMPE -q 0.1 -g 2.7e9 -s 50 --keep-dup all -n peak4_S7
+        
+# macs2 callpeak -t sample.bam -c control.bam -f BAM -g hs -n sample_with_control --outdir peaks/ --pvalue 1e-5
+# -t: Specifies the treatment sample (e.g., the BAM file with your enriched regions, such as ChIP or Cut&Run data).
+# -c: Specifies the control or input sample (e.g., a BAM file for a sample without enrichment, like whole-cell extract or input DNA).
+# --pvalue or --qvalue: Sets the statistical threshold for peak calling.
+# --outdir: Specifies the output directory for MACS2 results.       
+        
+        
+        
